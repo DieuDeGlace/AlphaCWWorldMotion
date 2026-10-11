@@ -10,7 +10,7 @@ Clouds follow a slow, bounded horizontal drift, using their native draw transfor
 
 Corners touching wood, rock, ground or other stationary materials are pinned. Unknown terrain data also pins a corner. Chunk-boundary corners remain pinned and movement ramps up over the next three blocks, so separately admitted chunks and different distance fades cannot split their common edge. This is intentionally conservative: crowns near chunk borders sway less. Trunks, reeds, buildings and characters remain stationary.
 
-When AlphaCWShadows and CWSMTAA are loaded under their established DLL names, the motion hook waits for them and runs outside their draw hooks. Shadows capture the animated buffer, and their replay shaders receive the same displacement. TAA continues to recognize the preserved native shader metadata. This integration is implemented but still needs a live visual check. This mod does not add cloud shadows.
+When AlphaCWShadows and CWSMTAA are loaded under their established DLL names, the motion hook waits for them and runs outside their draw hooks. Shadows capture the animated buffer, and their replay shaders receive the same displacement. TAA continues to recognize the preserved native shader metadata. Version 0.2 exports an explicit leaf replay function used by AlphaCWShadows 0.3, so caster and receiver draws apply the same displacement as the visible leaves. Cloud drift is captured once and never applied again during shadow replay. Cloud shadows are supplied by AlphaCWShadows 0.3 using a separate bounded map; install both updated DLLs.
 
 ## Performance
 
@@ -31,6 +31,7 @@ Settings are read at startup from `Mods/AlphaWorldMotion.ini`.
 | LeafRange | 96 | Full motion range in blocks; fades over the next 32; 32-160 |
 | CloudDriftDistance | 32 | Maximum X drift in blocks; 0-64; Y drift is 40% |
 | WindSpeedPercent | 100 | Motion rate; 10-200 |
+| CloudSpeedPercent | 200 | Cloud-only speed multiplier; 25-500; default twice the original drift speed |
 
 Logs and counters are written to `Mods/AlphaWorldMotion.log`. The inspected Alpha native layout is required; this is a prototype, not a Steam-version DLL.
 

@@ -21,7 +21,7 @@ IDirect3DDevice9 *device;
 void **vtable;
 DWORD models, game, layout;
 bool enabled = true, useClouds = true, useLeaves = true;
-float amplitude = .12f, range = 96, cloudDistance = 32, speed = 1;
+float amplitude = .12f, range = 96, cloudDistance = 32, speed = 1, cloudSpeed = 2;
 ULONGLONG started, lastRefresh, lastStats, frame;
 motion::Offset leafOffset{}, cloudOffset{};
 unsigned builtThisFrame, animatedDraws, cloudDraws, builds;
@@ -376,21 +376,31 @@ bool terrain(const float w[12]) {
                std::abs(w[2]) + std::abs(w[4]) + std::abs(w[6]) + std::abs(w[8]) + std::abs(w[9]) <
            .00001f;
 }
-HRESULT WINAPI dip(IDirect3DDevice9 *d, D3DPRIMITIVETYPE type, INT base, UINT min, UINT count,
-                   UINT start, UINT primitives) {
+HRESULT drawMotion(IDirect3DDevice9 *d, D3DPRIMITIVETYPE type, INT base, UINT min, UINT count,
+                   UINT start, UINT primitives, bool replayPass, Dip forward) {
     if (!enabled || type != D3DPT_TRIANGLELIST)
-        return originalDip(d, type, base, min, count, start, primitives);
+        return forward(d, type, base, min, count, start, primitives);
     IDirect3DVertexBuffer9 *buffer = nullptr;
     UINT offset = 0, stride = 0;
     d->GetStreamSource(0, &buffer, &offset, &stride);
     if (!buffer)
-        return originalDip(d, type, base, min, count, start, primitives);
+        return forward(d, type, base, min, count, start, primitives);
+    auto cached = meshes.find(buffer);
+    auto animated = animatedBuffers.find(buffer);
+    if ((replayPass && cached == meshes.end() && animated == animatedBuffers.end()) ||
+        (cached != meshes.end() && !cached->second->animated && buffer != cloudBuffer)) {
+        if (cached != meshes.end())
+            cached->second->seen = GetTickCount64();
+        drop(buffer);
+        return forward(d, type, base, min, count, start, primitives);
+    }
     float world[12]{};
-    bool changedCloud = useClouds && buffer == cloudBuffer;
+    // Shadow captures already contain cloud drift; do not translate them twice.
+    bool changedCloud = !replayPass && useClouds && buffer == cloudBuffer;
     bool leafCandidate = useLeaves && (stride == 8 || animatedBuffers.count(buffer));
     if (!changedCloud && !leafCandidate) {
         drop(buffer);
-        return originalDip(d, type, base, min, count, start, primitives);
+        return forward(d, type, base, min, count, start, primitives);
     }
     d->GetVertexShaderConstantF(27, world, 3);
     float wvp[16]{};
@@ -425,7 +435,7 @@ HRESULT WINAPI dip(IDirect3DDevice9 *d, D3DPRIMITIVETYPE type, INT base, UINT mi
         if (found != meshes.end()) {
             mesh = found->second.get();
             mesh->seen = GetTickCount64();
-        } else {
+        } else if (!replayPass) {
             IDirect3DVertexDeclaration9 *decl = nullptr;
             d->GetVertexDeclaration(&decl);
             if (decl)
@@ -453,7 +463,7 @@ HRESULT WINAPI dip(IDirect3DDevice9 *d, D3DPRIMITIVETYPE type, INT base, UINT mi
             ++animatedDraws;
         }
     }
-    HRESULT result = originalDip(d, type, base, min, count, start, primitives);
+    HRESULT result = forward(d, type, base, min, count, start, primitives);
     if (nativeDecl) {
         d->SetStreamSource(0, buffer, offset, stride);
         d->SetVertexDeclaration(nativeDecl);
@@ -469,6 +479,10 @@ HRESULT WINAPI dip(IDirect3DDevice9 *d, D3DPRIMITIVETYPE type, INT base, UINT mi
     drop(buffer);
     return result;
 }
+HRESULT WINAPI dip(IDirect3DDevice9 *d, D3DPRIMITIVETYPE type, INT base, UINT min, UINT count,
+                   UINT start, UINT primitives) {
+    return drawMotion(d, type, base, min, count, start, primitives, false, originalDip);
+}
 HRESULT WINAPI present(IDirect3DDevice9 *d, const RECT *a, const RECT *b, HWND w,
                        const RGNDATA *r) {
     // Present executes outside the native scene. Prepare only one bounded batch.
@@ -479,7 +493,7 @@ HRESULT WINAPI present(IDirect3DDevice9 *d, const RECT *a, const RECT *b, HWND w
     }
     double seconds = (GetTickCount64() - started) * .001 * speed;
     leafOffset = motion::leaves(seconds, amplitude);
-    cloudOffset = motion::clouds(seconds, cloudDistance);
+    cloudOffset = motion::clouds(seconds * cloudSpeed, cloudDistance);
     builtThisFrame = 0;
     ++frame;
     D3DDEVICE_CREATION_PARAMETERS creation{};
@@ -522,6 +536,7 @@ DWORD WINAPI worker(void *) {
     range = float(option(L"LeafRange", 96, 32, 160));
     cloudDistance = float(option(L"CloudDriftDistance", 32, 0, 64));
     speed = option(L"WindSpeedPercent", 100, 10, 200) * .01f;
+    cloudSpeed = option(L"CloudSpeedPercent", 200, 25, 500) * .01f;
     DWORD base = DWORD(uintptr_t(GetModuleHandleW(nullptr)));
     IMAGE_DOS_HEADER dos{};
     IMAGE_NT_HEADERS32 nt{};
@@ -593,6 +608,25 @@ DWORD WINAPI worker(void *) {
     return 0;
 }
 } // namespace
+// Explicit entry point for shadow draws that intentionally bypass the hook chain.
+// The caller supplies its native draw function; no shadow-hook recursion is needed.
+extern "C" __declspec(dllexport) HRESULT WINAPI ReplayAlphaMotion(IDirect3DDevice9 *d,
+                                                                  D3DPRIMITIVETYPE type, INT base,
+                                                                  UINT min, UINT count, UINT start,
+                                                                  UINT primitives, Dip forward) {
+    if (!forward)
+        return D3DERR_INVALIDCALL;
+    if (d != device)
+        return forward(d, type, base, min, count, start, primitives);
+    return drawMotion(d, type, base, min, count, start, primitives, true, forward);
+}
+extern "C" __declspec(dllexport) BOOL WINAPI QueryAlphaMotionOrigin(double *xy) {
+    if (!xy || !game || !updatePlayer(game, layout))
+        return FALSE;
+    xy[0] = player[0];
+    xy[1] = player[1];
+    return TRUE;
+}
 BOOL WINAPI DllMain(HINSTANCE self, DWORD reason, LPVOID) {
     if (reason == DLL_PROCESS_ATTACH) {
         module = self;

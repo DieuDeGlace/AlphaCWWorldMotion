@@ -3,6 +3,8 @@
 #include <cassert>
 
 using Compile = decltype(&D3DCompile);
+extern "C" HRESULT WINAPI ReplayAlphaMotion(IDirect3DDevice9 *, D3DPRIMITIVETYPE, INT, UINT, UINT,
+                                            UINT, UINT, Dip);
 static unsigned cloudChecks;
 static HRESULT WINAPI cloudSpy(IDirect3DDevice9 *d, D3DPRIMITIVETYPE, INT, UINT, UINT, UINT, UINT) {
     float world[12]{}, projection[16]{};
@@ -307,6 +309,15 @@ int main() {
         }
         assert(((shifted >> 16) & 255) > 240 && (shifted & 255) > 195 && (shifted & 255) < 215);
         assert(((anchored >> 16) & 255) > 240 && ((untouched >> 16) & 255) == 0);
+        // Shadow replay bypasses the installed DIP hook, so use the explicit API.
+        assert(SUCCEEDED(device->Clear(0, nullptr, D3DCLEAR_TARGET, 0xff000000, 1, 0)));
+        assert(SUCCEEDED(device->BeginScene()));
+        assert(
+            SUCCEEDED(ReplayAlphaMotion(device, D3DPT_TRIANGLELIST, 0, 0, 4, 0, 2, originalDip)));
+        assert(SUCCEEDED(device->EndScene()));
+        assert(pixel(target, 36, 30) == shifted && pixel(target, 17, 17) == anchored &&
+               pixel(target, 36, 17) == untouched);
+        puts("PASS: explicit shadow replay matches the visible leaf displacement exactly.");
         IDirect3DVertexShader9 *restored = nullptr;
         device->GetVertexShader(&restored);
         assert(restored == native);
