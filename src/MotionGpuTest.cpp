@@ -135,6 +135,20 @@ static void meshPreparationTest() {
         assert(!memcmp(&v.color, nativeVertices + i * 8 + 4, 4));
     }
     mesh.animated->Unlock();
+    cleanup();
+    builtThisFrame = 0;
+    for (auto &cell : cells)
+        cell = (cell & 0x00ffffffu) | (11u << 24);
+    admit(buffer, decl, world);
+    assert(pending);
+    for (int i = 0; i < 100 && pending; ++i)
+        advance();
+    assert(!pending && meshes.count(buffer) && !meshes.at(buffer)->animated);
+    assert(SUCCEEDED(buffer->Lock(0, 0, &data, D3DLOCK_READONLY)));
+    assert(!memcmp(data, nativeVertices, sizeof(nativeVertices)));
+    buffer->Unlock();
+    puts(
+        "PASS: Alpha ground/road material 11 never creates an animated buffer; native road vertices unchanged.");
     drop(decl);
     drop(buffer);
     cleanup();

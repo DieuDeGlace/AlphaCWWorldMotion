@@ -6,7 +6,7 @@ Install `AlphaWorldMotion.dll` and `AlphaWorldMotion.ini` in the game's `Mods` d
 
 ## Motion and seams
 
-Clouds follow a slow, bounded horizontal drift, using their native draw transform. Leaves and snowy leaves are selected from terrain block types 8 and 11, never from their colors. A cached per-corner weight drives two added vertex-shader instructions. Native shader bytecode, lighting, vertex colors and face IDs remain intact.
+Clouds follow a slow, bounded horizontal drift, using their native draw transform. Leaves are selected from verified Alpha block type 8, never from their colors. Alpha material 11 is stationary ground/road terrain and is explicitly excluded; Steam snow-leaf IDs are not reused. A cached per-corner weight drives two added vertex-shader instructions. Native shader bytecode, lighting, vertex colors and face IDs remain intact.
 
 Corners touching wood, rock, ground or other stationary materials are pinned. Unknown terrain data also pins a corner. Chunk-boundary corners remain pinned and movement ramps up over the next three blocks, so separately admitted chunks and different distance fades cannot split their common edge. This is intentionally conservative: crowns near chunk borders sway less. Trunks, reeds, buildings and characters remain stationary.
 
@@ -50,3 +50,7 @@ The DLL is produced at `build/Mods/AlphaWorldMotion.dll`. GPU validation uses a 
 Source uses the checked-in `.clang-format` style: four-space indentation and a 100-column target. Format project `.cpp`/`.h` files with clang-format; preserve embedded shader strings.
 
 See [VALIDATION.md](VALIDATION.md) for what has actually been verified. MIT licensed; no proprietary game code or assets are distributed.
+
+## Alpha material correction (0.3)
+
+Read-only sampling of native Alpha terrain confirmed green canopy material 8 and ground/road material 11. The original Steam-derived 8/11 classifier incorrectly animated Alpha roads. Only verified type 8 is now eligible, while 11 pins contacting corners as stationary terrain. This changes cached selection only and adds no per-frame work. Unverified snow-leaf IDs remain stationary. Cloud speed is unchanged in this correction.

@@ -14,8 +14,10 @@ int main() {
     auto unknown = [](int, int, int) { return -1; };
     assert(motion::corner(8, 8, 20, rock) == 0);
     assert(motion::corner(8, 8, 20, unknown) == 0);
-    auto snowy = [](int, int, int) { return 11; };
-    assert(motion::corner(8, 8, 20, snowy) == 1);
+    auto road = [](int, int, int) { return 11; };
+    assert(motion::corner(8, 8, 20, road) == 0);
+    auto roadContact = [](int x, int y, int z) { return x == 7 && y == 7 && z == 19 ? 11 : 8; };
+    assert(motion::corner(8, 8, 20, roadContact) == 0);
     // Independently admitted neighboring chunks stay joined even at different fades.
     assert(motion::corner(32, 8, 20, leaf) * 1.f == motion::corner(0, 8, 20, leaf) * .25f);
     for (int t = 0; t < 100000; t += 17) {

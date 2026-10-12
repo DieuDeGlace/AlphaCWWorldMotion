@@ -6,8 +6,10 @@ namespace motion {
 struct Offset {
     float x, y;
 };
+// Verified against Alpha's native terrain: 8 is foliage, while 11 occurs on
+// ground/roads. Steam's snow-leaf ID must never be reused as an Alpha leaf ID.
 inline bool foliage(int type) {
-    return type == 8 || type == 11;
+    return type == 8;
 }
 inline bool stationary(int type) {
     return type < 0 || (type != 0 && !foliage(type));
