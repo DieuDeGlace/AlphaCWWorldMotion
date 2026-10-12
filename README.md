@@ -24,14 +24,14 @@ Newly visible trees may take time to begin swaying. Native cloud culling still a
 
 Settings are read at startup from `Mods/AlphaWorldMotion.ini`.
 
-| Setting | Default | Meaning |
+| Setting | Shipped preset | Meaning |
 | --- | --- | --- |
 | Enabled, Clouds, Leaves | 1 | Independent motion switches |
 | LeafAmplitudePercent | 12 | Hundredths of a block; 0-25 |
 | LeafRange | 96 | Full motion range in blocks; fades over the next 32; 32-160 |
 | CloudDriftDistance | 32 | Maximum X drift in blocks; 0-64; Y drift is 40% |
 | WindSpeedPercent | 100 | Motion rate; 10-200 |
-| CloudSpeedPercent | 200 | Cloud-only speed multiplier; 25-500; default twice the original drift speed |
+| CloudSpeedPercent | 250 | Cloud-only speed multiplier; 25-500; 25% faster than the previous 200 preset |
 
 Logs and counters are written to `Mods/AlphaWorldMotion.log`. The inspected Alpha native layout is required; this is a prototype, not a Steam-version DLL.
 
@@ -54,3 +54,5 @@ See [VALIDATION.md](VALIDATION.md) for what has actually been verified. MIT lice
 ## Alpha material correction (0.3)
 
 Read-only sampling of native Alpha terrain confirmed green canopy material 8 and ground/road material 11. The original Steam-derived 8/11 classifier incorrectly animated Alpha roads. Only verified type 8 is now eligible, while 11 pins contacting corners as stationary terrain. This changes cached selection only and adds no per-frame work. Unverified snow-leaf IDs remain stationary. Cloud speed is unchanged in this correction.
+
+Version 0.3.1 raises the shipped cloud-only preset to 250 after the ground fix and TAA improvement were confirmed. This configuration-only update uses the same DLL and shadow budgets. Settings are read on the next launch. If the INI is absent, the compiled fallback remains 200.
