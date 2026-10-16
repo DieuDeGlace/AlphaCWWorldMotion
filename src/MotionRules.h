@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 
+// Pure rules for leaf sway and cloud drift (shared by the DLL and tests).
 namespace motion {
 struct Offset {
     float x, y;
@@ -11,19 +12,28 @@ struct Offset {
 inline bool foliage(int type) {
     return type == 8;
 }
+// Anything solid that is not foliage anchors nearby leaves; -1 means unknown.
 inline bool stationary(int type) {
     return type < 0 || (type != 0 && !foliage(type));
 }
+// Horizontal leaf displacement at time `seconds`: two blended sine waves.
 inline Offset leaves(double seconds, float amplitude) {
     return {amplitude * float(.7 * std::sin(seconds * 1.7) + .3 * std::sin(seconds * 3.1)),
             amplitude * .65f * float(std::sin(seconds * 1.35 + .8))};
 }
+// Slow horizontal cloud drift within +/- distance (x) and +/- 0.4 * distance (y).
 inline Offset clouds(double seconds, float distance) {
     return {distance * float(std::sin(seconds * .012)),
             distance * .4f * float(std::sin(seconds * .009))};
 }
 // Pin chunk boundaries as well as stationary contacts. Independent chunk admission,
 // distance fading and unloading cannot pull a shared boundary corner apart.
+//
+// Returns the sway weight (0..1) of the mesh vertex at chunk-local corner
+// (x, y, z). `sample(x, y, z)` gives the material of the block at those
+// coordinates. A corner moves only if all eight blocks touching it are air or
+// foliage and at least one is foliage; the weight fades to 0 within three blocks
+// of the chunk edge.
 template <class Sample> float corner(int x, int y, int z, Sample sample) {
     if (x <= 0 || y <= 0 || x >= 32 || y >= 32)
         return 0;
